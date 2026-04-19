@@ -16,6 +16,7 @@ ___
 
 * [Usage](#usage)
   * [Workflow](#workflow)
+  * [Verification](#verification)
   * [Run on new tag](#run-on-new-tag)
   * [Signing](#signing)
   * [Upload artifacts](#upload-artifacts)
@@ -54,15 +55,15 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       -
         name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           # either 'goreleaser' (default) or 'goreleaser-pro'
           distribution: goreleaser
@@ -76,6 +77,44 @@ jobs:
 ```
 
 > **IMPORTANT**: note the `fetch-depth: 0` input in `Checkout` step. It is required  for the changelog to work correctly.
+
+### Verification
+
+The action verifies the integrity of the downloaded GoReleaser archive
+against the published `checksums.txt` automatically — no configuration
+required.
+
+If [`cosign`](https://docs.sigstore.dev/cosign/) is available on `PATH`, the
+action will additionally verify the cosign sigstore signature of the
+checksums file against the GoReleaser release workflow's OIDC identity. If
+`cosign` isn't installed, this step is silently skipped.
+
+> **Note**: cosign signature verification requires GoReleaser **v2.13.0 or
+> newer** (and the matching `nightly`). Earlier releases ship a `.sig`
+> detached signature signed with cosign v2, which is not compatible with
+> the cosign v3 sigstore-bundle format the action verifies. For older
+> versions the cosign step is silently skipped — only the `checksums.txt`
+> SHA-256 verification runs.
+
+To enable signature verification, install cosign before running the action:
+
+```yaml
+      -
+        name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Both checksum and signature verification work for tagged releases (≥ v2.13.0)
+and the `nightly` channel.
 
 ### Run on new tag
 
@@ -93,7 +132,7 @@ Or with a condition on GoReleaser step:
 ```yaml
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         if: startsWith(github.ref, 'refs/tags/')
         with:
           version: '~> v2'
@@ -113,13 +152,13 @@ the [Import GPG](https://github.com/crazy-max/ghaction-import-gpg) GitHub Action
       -
         name: Import GPG key
         id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
@@ -144,7 +183,7 @@ purposes. You can do that with the [actions/upload-artifact](https://github.com/
 ```yaml
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
@@ -153,7 +192,7 @@ purposes. You can do that with the [actions/upload-artifact](https://github.com/
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Upload assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: myapp
           path: myfolder/dist/*
@@ -165,7 +204,7 @@ purposes. You can do that with the [actions/upload-artifact](https://github.com/
 steps:
   -
     name: Install GoReleaser
-    uses: goreleaser/goreleaser-action@v6
+    uses: goreleaser/goreleaser-action@v7
     with:
       install-only: true
   -
@@ -219,7 +258,7 @@ secret named `GH_PAT`, the step will look like this:
 ```yaml
       -
         name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
@@ -233,15 +272,16 @@ If you need the auto-snapshot feature, take a look at [this example repository](
 
 ## Development
 
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full development workflow.
+
+Quick reference:
+
 ```
-# format code and build javascript artifacts
-docker buildx bake pre-checkin
+# install dependencies
+npm ci
 
-# validate all code has correctly formatted and built
-docker buildx bake validate
-
-# run tests
-docker buildx bake test
+# format, build dist/, and run tests
+npm run pre-checkin
 ```
 
 ## License
