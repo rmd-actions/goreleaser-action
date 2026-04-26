@@ -16,6 +16,7 @@ ___
 
 * [Usage](#usage)
   * [Workflow](#workflow)
+  * [Verification](#verification)
   * [Run on new tag](#run-on-new-tag)
   * [Signing](#signing)
   * [Upload artifacts](#upload-artifacts)
@@ -77,6 +78,44 @@ jobs:
 
 > **IMPORTANT**: note the `fetch-depth: 0` input in `Checkout` step. It is required  for the changelog to work correctly.
 
+### Verification
+
+The action verifies the integrity of the downloaded GoReleaser archive
+against the published `checksums.txt` automatically — no configuration
+required.
+
+If [`cosign`](https://docs.sigstore.dev/cosign/) is available on `PATH`, the
+action will additionally verify the cosign sigstore signature of the
+checksums file against the GoReleaser release workflow's OIDC identity. If
+`cosign` isn't installed, this step is silently skipped.
+
+> **Note**: cosign signature verification requires GoReleaser **v2.13.0 or
+> newer** (and the matching `nightly`). Earlier releases ship a `.sig`
+> detached signature signed with cosign v2, which is not compatible with
+> the cosign v3 sigstore-bundle format the action verifies. For older
+> versions the cosign step is silently skipped — only the `checksums.txt`
+> SHA-256 verification runs.
+
+To enable signature verification, install cosign before running the action:
+
+```yaml
+      -
+        name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Both checksum and signature verification work for tagged releases (≥ v2.13.0)
+and the `nightly` channel.
+
 ### Run on new tag
 
 If you want to run GoReleaser only on new tag, you can use this event:
@@ -113,7 +152,7 @@ the [Import GPG](https://github.com/crazy-max/ghaction-import-gpg) GitHub Action
       -
         name: Import GPG key
         id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
@@ -183,11 +222,28 @@ Following inputs can be used as `step.with` keys
 |------------------|---------|--------------|------------------------------------------------------------------|
 | `distribution`   | String  | `goreleaser` | GoReleaser distribution, either `goreleaser` or `goreleaser-pro` |
 | `version`**¹**   | String  | `~> v2`      | GoReleaser version                                               |
+| `version-file`**²** | String  |              | Read the GoReleaser version from a file (see below)              |
 | `args`           | String  |              | Arguments to pass to GoReleaser                                  |
 | `workdir`        | String  | `.`          | Working directory (below repository root)                        |
 | `install-only`   | Bool    | `false`      | Just install GoReleaser                                          |
 
 > **¹** Can be a fixed version like `v0.117.0` or a max satisfying semver one like `~> 0.132`. In this case this will return `v0.132.1`.
+>
+> **²** Path to a file containing the GoReleaser version. Resolved relative
+> to `workdir`. Currently only [`.tool-versions`](https://asdf-vm.com/manage/configuration.html#tool-versions)
+> (asdf/mise) format is supported. When set, this takes precedence over `version`.
+>
+> ```yaml
+> # .tool-versions
+> goreleaser 2.13.0
+> ```
+>
+> ```yaml
+> - uses: goreleaser/goreleaser-action@v7
+>   with:
+>     version-file: .tool-versions
+>     args: release --clean
+> ```
 
 ### outputs
 
@@ -233,15 +289,16 @@ If you need the auto-snapshot feature, take a look at [this example repository](
 
 ## Development
 
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full development workflow.
+
+Quick reference:
+
 ```
-# format code and build javascript artifacts
-docker buildx bake pre-checkin
+# install dependencies
+npm ci
 
-# validate all code has correctly formatted and built
-docker buildx bake validate
-
-# run tests
-docker buildx bake test
+# format, build dist/, and run tests
+npm run pre-checkin
 ```
 
 ## License
